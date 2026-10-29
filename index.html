@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quant-CAPTCHA: prove you're human by delta-hedging</title>
+<style>
+:root{--bg:#0c1320;--pn:#141e30;--ln:#243249;--tx:#e6ecf5;--mu:#8496ae;--am:#ffa028;--gr:#3ddc97;--rd:#ff5a6a}
+*{box-sizing:border-box}
+body{margin:0;padding:16px;background:var(--bg);color:var(--tx);font:14px/1.5 "Segoe UI",system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.w{max-width:1000px;margin:0 auto}
+h1{font:700 26px/1.1 Georgia,serif;margin:0;color:var(--am)}
+.sub{color:var(--mu);margin:4px 0 14px}
+.g{display:grid;grid-template-columns:2fr 1fr;gap:12px}
+.g>div{display:flex;flex-direction:column;gap:12px}
+@media(max-width:760px){.g{grid-template-columns:1fr}}
+.p{background:var(--pn);border:1px solid var(--ln);border-radius:6px;padding:12px}
+canvas{width:100%;height:240px;display:block}
+.st{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media(max-width:520px){.st{grid-template-columns:repeat(2,1fr)}}
+.st span{display:block;color:var(--mu);font-size:12px}
+.st b{font-size:19px;font-weight:600}
+.bar{height:12px;background:#1d2a41;border-radius:2px;overflow:hidden;margin:8px 0}
+.bar i{display:block;height:100%;width:0;background:var(--gr)}
+.row{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+button{background:#1d2a41;color:var(--tx);border:1px solid #33476a;border-radius:4px;padding:9px 13px;font:inherit;cursor:pointer}
+button:hover,button:focus-visible{border-color:var(--am);outline:none}
+input[type=range]{width:100%;margin-top:12px;accent-color:#ffa028}
+#log{height:170px;overflow:hidden;color:var(--mu);font-size:13px}
+#log div{margin-bottom:6px}#log div:first-child{color:var(--tx)}
+.note{color:var(--mu);font-size:12px}
+#ov{position:fixed;inset:0;background:rgba(6,10,18,.94);display:flex;align-items:center;justify-content:center;padding:16px;z-index:9}
+#ov .p{max-width:430px;text-align:center}
+#ov h2{font:700 22px Georgia,serif;margin:0 0 8px}
+.cb{display:inline-flex;align-items:center;gap:12px;border:1px solid #bbb;border-radius:3px;padding:14px 20px;background:#f9f9f9;color:#222;font:15px Arial,sans-serif;position:relative;cursor:pointer;user-select:none;transition:left .15s,top .15s}
+.cb u{width:24px;height:24px;border:2px solid #888;border-radius:2px;text-decoration:none;display:inline-block;line-height:20px;font-weight:700;background:#fff}
+</style>
+</head>
+<body>
+<div id="ov"><div class="p"><h2>Human verification required</h2><p>To tick one checkbox you must first delta-hedge a short book of 100 call options for 54 seconds. Keep net delta near zero. The market will not cooperate.</p><button id="go">Begin verification</button></div></div>
+<div class="w">
+<h1>Quant-CAPTCHA</h1>
+<div class="sub">The world's most secure checkbox. Black-Scholes pricing, stochastic volatility and jump risk, to prove you're not a bot.</div>
+<div class="g">
+<div>
+<div class="p"><canvas id="c"></canvas></div>
+<div class="p">
+<div class="st">
+<div><span>Spot</span><b id="s">100.00</b></div>
+<div><span>Implied vol</span><b id="v">60%</b></div>
+<div><span>Time to expiry</span><b id="t">54s</b></div>
+<div><span>P&amp;L</span><b id="pl">$0</b></div>
+<div><span>Required hedge (Δ×100)</span><b id="rq">0</b></div>
+<div><span>Your shares</span><b id="sh">0</b></div>
+<div><span>Net delta</span><b id="nd">0</b></div>
+<div><span>Gamma (pain)</span><b id="gm">0</b></div>
+</div>
+<input type="range" id="sl" min="-50" max="150" value="0" aria-label="Shares held">
+<div class="row">
+<button data-q="-10">−10</button><button data-q="-1">−1</button><button data-q="1">+1</button><button data-q="10">+10</button>
+<button id="ai">Delegate to AI Risk Officer</button>
+</div>
+</div>
+</div>
+<div>
+<div class="p"><div>Suspicion: <b id="sp">0%</b></div><div class="bar"><i id="sb"></i></div><div class="note">Reach 100% and you are margin-called. Keep net delta inside ±10 shares.</div></div>
+<div class="p"><div id="log"></div></div>
+<div class="note">Strike 100. Short 100 calls. Fees: 5 bps per share traded, because freedom isn't free.</div>
+</div>
+</div>
+</div>
+<script>
+const $=i=>document.getElementById(i),K=100,S0=100,R=.02,Q=100,TOT=180,TY=.1,DT=TY/TOT,MS=300;
+const rn=()=>Math.sqrt(-2*Math.log(1-Math.random()))*Math.cos(6.2832*Math.random());
+const N=x=>{const t=1/(1+.2316419*Math.abs(x)),p=.3989423*Math.exp(-x*x/2)*t*(.3193815+t*(-.3565638+t*(1.781478+t*(-1.821256+t*1.330274))));return x>0?1-p:p};
+const bs=(S,tau,s)=>{if(tau<1e-6)return{c:Math.max(S-K,0),d:S>K?1:0,g:0};const q=s*Math.sqrt(tau),d1=(Math.log(S/K)+(R+s*s/2)*tau)/q,d2=d1-q;return{c:S*N(d1)-K*Math.exp(-R*tau)*N(d2),d:N(d1),g:Math.exp(-d1*d1/2)*.3989423/(S*q)}};
+const AI=['AI Risk Officer: I have hedged by vibes. Gamma is a social construct.','AI Risk Officer: Delta is a feeling. I have chosen yours.','AI Risk Officer: Confidence 99.7%. Accuracy undisclosed.','AI Risk Officer: I read half of Hull. The half with the pictures.'];
+let S,ls,k,sh,cash,sus,hist,live,tm,fl,cur;
+const say=t=>{const d=document.createElement('div');d.textContent=t;$('log').prepend(d);while($('log').children.length>8)$('log').lastChild.remove()};
+function start(){clearInterval(tm);$('ov').style.display='none';$('log').innerHTML='';S=S0;ls=Math.log(.6);k=0;sh=0;sus=0;fl={};hist=[S0];live=true;
+cur={S,sig:.6,o:bs(S0,TY,.6)};cash=Q*cur.o.c;
+say('You are short 100 calls, strike 100. Buy shares until net delta is about zero. Clock starts in 3 seconds.');render();tm=setInterval(step,MS)}
+function step(){k++;
+ls+=.15*(Math.log(.6)-ls)+.07*rn();const sig=Math.min(1.6,Math.max(.25,Math.exp(ls)));
+S*=Math.exp((R-sig*sig/2)*DT+sig*Math.sqrt(DT)*rn());
+if(Math.random()<.035){const j=(Math.random()<.5?-1:1)*(.03+Math.random()*.04);S*=Math.exp(j);say(j>0?'Spot gapped up '+(j*100).toFixed(1)+'%. Markets are not normal. Neither is this form.':'Spot gapped down '+(-j*100).toFixed(1)+'%. Black-Scholes sends its regards.')}
+hist.push(S);cur={S,sig,o:bs(S,TY*(1-k/TOT),sig)};
+const a=Math.abs(sh-Q*cur.o.d);
+if(k>10)sus=a>10?Math.min(100,sus+Math.min(7,1+(a-10)*.3)):Math.max(0,sus-2);
+if(sus<30)fl={};
+if(sus>50&&!fl.a){fl.a=1;say('Your hedging resembles a bot. A bot that never read Hull.')}
+if(sus>80&&!fl.b){fl.b=1;say('Margin call imminent. Please think of your GPA.')}
+if(k==60)say('One third of expiry gone. You have not been human yet.');
+if(k==120)say('Two thirds gone. Theta is eating your lunch.');
+if(k==160)say('Nearly there. The checkbox is nervous too.');
+render();if(sus>=100)end(false);else if(k>=TOT)end(true)}
+function trade(q){if(!live||!q)return;sh+=q;cash-=q*cur.S+Math.abs(q)*cur.S*.0005;render()}
+function render(){const{S,sig,o}=cur,nd=sh-Q*o.d,p=cash+sh*S-Q*o.c,m=Math.abs(nd);
+$('s').textContent=S.toFixed(2);$('v').textContent=(sig*100).toFixed(0)+'%';$('t').textContent=Math.max(0,(TOT-k)*MS/1000).toFixed(0)+'s';
+$('rq').textContent=(Q*o.d).toFixed(1);$('sh').textContent=sh;$('gm').textContent=(Q*o.g).toFixed(1);
+$('nd').textContent=(nd>0?'+':'')+nd.toFixed(1);$('nd').style.color=m>10?'var(--rd)':m>5?'var(--am)':'var(--gr)';
+$('pl').textContent=(p>=0?'+$':'-$')+Math.abs(p).toFixed(0);$('pl').style.color=p>=0?'var(--gr)':'var(--rd)';
+$('sl').value=sh;$('sp').textContent=sus.toFixed(0)+'%';$('sb').style.width=sus+'%';$('sb').style.background=sus>66?'var(--rd)':sus>33?'var(--am)':'var(--gr)';draw()}
+function draw(){const c=$('c'),x=c.getContext('2d'),W=c.width=c.clientWidth*2,H=c.height=480,lo=Math.min(K-2,...hist)-1,hi=Math.max(K+2,...hist)+1,Y=v=>H-(v-lo)/(hi-lo)*H,X=i=>i/TOT*W;
+x.strokeStyle='#ffa028';x.setLineDash([10,10]);x.lineWidth=2;x.beginPath();x.moveTo(0,Y(K));x.lineTo(W,Y(K));x.stroke();x.setLineDash([]);
+x.strokeStyle='#e6ecf5';x.lineWidth=3;x.beginPath();hist.forEach((v,i)=>i?x.lineTo(X(i),Y(v)):x.moveTo(X(i),Y(v)));x.stroke();
+x.fillStyle='#ffa028';x.font='22px sans-serif';x.fillText('Strike 100',8,Y(K)-8)}
+function end(w){live=false;clearInterval(tm);const o=$('ov'),p=cash+sh*cur.S-Q*cur.o.c,pf=(p>=0?'+$':'-$')+Math.abs(p).toFixed(0);o.style.display='flex';
+if(!w){o.innerHTML='<div class="p"><h2 style="color:var(--rd)">Margin call</h2><p>Your checkbox has been liquidated. Final P&amp;L '+pf+'. Please try again, forever.</p><button id="rt">Re-enter the market</button></div>';$('rt').onclick=start;return}
+o.innerHTML='<div class="p"><h2>Hedge survived</h2><p>Final P&amp;L '+pf+'. One last step: confirm your humanity.</p><div class="cb" id="cb"><u id="bx"></u>I\'m not a robot</div><p id="rs" class="note">reCAPTCHA is a trademark of nobody who has seen this.</p></div>';
+let n=0;const cb=$('cb');
+cb.onmouseenter=()=>{if(n++<3){cb.style.left=(Math.random()*160-80)+'px';cb.style.top=(Math.random()*60-30)+'px'}};
+cb.onclick=()=>{$('bx').textContent='✔';$('bx').style.color='#1a9b4a';$('rs').textContent='Verified: probably human. Total effort: one options book, 54 seconds, zero dignity.';cb.onclick=null;$('rs').insertAdjacentHTML('afterend','<button id="rt">Go again</button>');$('rt').onclick=start}}
+$('sl').oninput=e=>trade(+e.target.value-sh);
+document.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>trade(+b.dataset.q));
+$('ai').onclick=()=>{if(!live)return;const r=Math.random()<.5?.2+Math.random()*.5:1.3+Math.random()*.8;trade(Math.round(Q*cur.o.d*r)-sh);say(AI[Math.floor(Math.random()*AI.length)])};
+$('go').onclick=start;
+cur={S:S0,sig:.6,o:bs(S0,TY,.6)};hist=[S0];k=0;sh=0;sus=0;cash=0;draw();
+</script>
+</body>
+</html>
